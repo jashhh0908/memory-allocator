@@ -3,7 +3,8 @@
 #include <cstdint>
 
 struct Header {
-    size_t size; // total blocks size (sizeof(header) + bytes) inside of the main chunk
+    size_t size; //total blocks size (sizeof(header) + bytes) inside of the main chunk
+    size_t padding; //to make it 8 bytes
 };
 
 struct FreeBlock {
@@ -22,7 +23,9 @@ void* allocate(Block *block, size_t bytes) {
     //1. Search the free list
     FreeBlock* prev = nullptr;
     FreeBlock* temp = block->freelist;
-    size_t required = sizeof(Header) + bytes;
+    //take the size of the maximum alignment for allocation
+    const size_t ALIGNMENT = alignof(std::max_align_t); 
+    size_t required = sizeof(Header) + ((bytes + ALIGNMENT - 1) & ~(ALIGNMENT - 1));
     while(temp) {
         if(temp->header.size >= required) {
             break;
@@ -31,22 +34,34 @@ void* allocate(Block *block, size_t bytes) {
         temp = temp->next;
     }
     if(temp) {
-        if(temp == block->freelist) {
-            //first block is free
-            block->freelist = temp->next;
+        size_t remaining_size = temp->header.size - required;
+        temp->header.size = required;
+        FreeBlock* next = temp->next;
+        if(remaining_size >= sizeof(FreeBlock)) {
+            uintptr_t leftover_addr = (uintptr_t)temp + required;
+            FreeBlock* leftover = (FreeBlock*)leftover_addr;
+            leftover->header.size = remaining_size;
+            if(temp == block->freelist) {
+                block->freelist = leftover;
+            } else {
+                prev->next = leftover;
+            }
+            leftover->next = next;
+            return (void*)((uintptr_t)temp + sizeof(Header));
         } else {
-            prev->next = temp->next;
+            if(temp == block->freelist) {
+                //first block is free
+                block->freelist = temp->next;
+            } else {
+                prev->next = temp->next;
+            }
+            return (void*)((uintptr_t)temp + sizeof(Header));
         }
-        uintptr_t addr = (uintptr_t)temp + sizeof(Header);
-        return (void*)addr;
     } else {
         //2. If no free blocks are there, allocate normally
-        //take the size of the maximum alignment for allocation
-        const size_t ALIGNMENT = alignof(std::max_align_t); 
-        
         //uintptr_t lets us perform pointer arithmetic
         uintptr_t current_addr = (uintptr_t)block->ptr + block->used;
-        size_t total_size = sizeof(Header) + bytes;
+        size_t total_size = sizeof(Header) + ((bytes + ALIGNMENT - 1) & ~(ALIGNMENT - 1));
 
         /*  
             We align the addresses to make it optimal for the CPU to access the bytes.
@@ -93,13 +108,17 @@ int main() {
     block.freelist = nullptr;
 
     void* p1 = allocate(&block, 100);
-    void* p2 = allocate(&block, 50);
-    
     std::cout << "p1 = " << p1 << '\n';
-    std::cout << "p2 = " << p2 << '\n';
-    
+
     free(&block, p1);
     std::cout << "Freed p1\n";
+
+    void* p2 = allocate(&block, 40);
+    std::cout << "p2 = " << p2 << '\n';
+
+    if(p1 == p2) {
+        std::cout << "Reused block\n";
+    }
 
     void* p3 = allocate(&block, 80);
     std::cout << "p3 = " << p3 << '\n';
