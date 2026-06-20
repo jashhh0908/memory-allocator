@@ -78,31 +78,20 @@ void* alloc(Block *block, size_t bytes) {
 
 void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
     if(curr == nullptr) {
-        std::cout << "Prev Addr = " << (uintptr_t)prev << std::endl;
-        std::cout << "Prev Size = " << prev->header.size << std::endl;
-        std::cout << "Add Addr = " << (uintptr_t)add << std::endl;
         uintptr_t end_prev = (uintptr_t)prev + prev->header.size;
-        std::cout << "End Addr = " << end_prev << std::endl;
-        
         if(end_prev == (uintptr_t)add) {
             prev->header.size += add->header.size;
             prev->next = add->next;
         }
-        //backward coalesce, for now skip
         return;
     }
-    std::cout << "Add Addr = " << (uintptr_t)add << std::endl;
-    std::cout << "Add Size = " << add->header.size << std::endl;
-    std::cout << "Curr Addr = " << (uintptr_t)curr << std::endl;
-
     uintptr_t end_add = (uintptr_t)add + add->header.size;
-    std::cout << "End Addr = " << end_add << std::endl;
-
     if(end_add == (uintptr_t)curr) {
         add->header.size += curr->header.size;
         add->next = curr->next;
     }
 }
+
 void dealloc(Block *block, void *ptr) {
     Header* h = ((Header*)ptr - 1);
     FreeBlock* add = (FreeBlock*)h;
