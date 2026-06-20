@@ -24,3 +24,4 @@ size_t align_bytes(size_t bytes);
 void* alloc(Block* block, size_t bytes);
 void dealloc(Block* block, void* ptr);
 void* bump_alloc(Block* block, size_t bytes);
+void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr);

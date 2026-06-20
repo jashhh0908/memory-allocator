@@ -76,9 +76,63 @@ void* alloc(Block *block, size_t bytes) {
     }
 }
 
+void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
+    if(curr == nullptr) {
+        std::cout << "Prev Addr = " << (uintptr_t)prev << std::endl;
+        std::cout << "Prev Size = " << prev->header.size << std::endl;
+        std::cout << "Add Addr = " << (uintptr_t)add << std::endl;
+        uintptr_t end_prev = (uintptr_t)prev + prev->header.size;
+        std::cout << "End Addr = " << end_prev << std::endl;
+        
+        if(end_prev == (uintptr_t)add) {
+            prev->header.size += add->header.size;
+            prev->next = add->next;
+        }
+        //backward coalesce, for now skip
+        return;
+    }
+    std::cout << "Add Addr = " << (uintptr_t)add << std::endl;
+    std::cout << "Add Size = " << add->header.size << std::endl;
+    std::cout << "Curr Addr = " << (uintptr_t)curr << std::endl;
+
+    uintptr_t end_add = (uintptr_t)add + add->header.size;
+    std::cout << "End Addr = " << end_add << std::endl;
+
+    if(end_add == (uintptr_t)curr) {
+        add->header.size += curr->header.size;
+        add->next = curr->next;
+    }
+}
 void dealloc(Block *block, void *ptr) {
     Header* h = ((Header*)ptr - 1);
     FreeBlock* add = (FreeBlock*)h;
-    add->next = block->freelist;
-    block->freelist = add; 
-}
+    add->next = nullptr;
+    if(!block->freelist) {
+        block->freelist = add;
+        return;
+    } 
+    if((uintptr_t)add < (uintptr_t)block->freelist) {
+        FreeBlock* old = block->freelist;
+        add->next = old;
+        block->freelist = add;
+        coalesce(nullptr, add, old);
+        return;
+    }
+    FreeBlock* prev = nullptr;
+    FreeBlock* curr = block->freelist;
+    while(curr) {
+        if((uintptr_t)curr > (uintptr_t)add) {
+            break;
+        }
+        prev = curr;
+        curr = curr->next;
+    } 
+    if(curr == nullptr) {
+        prev->next = add;
+        coalesce(prev, add, nullptr);
+        return;
+    }
+    prev->next = add;
+    add->next = curr;
+    coalesce(prev, add, curr);
+}   
