@@ -92,9 +92,7 @@ void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
     }
 }
 
-void js_dealloc(Block *block, void *ptr) {
-    Header* h = ((Header*)ptr - 1);
-    FreeBlock* add = (FreeBlock*)h;
+void insert_free_block(Block* block, FreeBlock* add) {
     add->next = nullptr;
     if(!block->freelist) {
         block->freelist = add;
@@ -124,6 +122,12 @@ void js_dealloc(Block *block, void *ptr) {
     prev->next = add;
     add->next = curr;
     coalesce(prev, add, curr);
+}
+
+void js_dealloc(Block *block, void *ptr) {
+    Header* h = ((Header*)ptr - 1);
+    FreeBlock* add = (FreeBlock*)h;
+    insert_free_block(block, add);
 }   
 
 void js_memset(void* ptr, int value, size_t count) {
@@ -146,4 +150,114 @@ void* js_calloc(Block* block, size_t count, size_t size) {
     }
     js_memset(ptr, 0, total);
     return ptr;
+}
+
+void js_memcpy( void* dest, void* src, size_t count) {
+    unsigned char* s = (unsigned char*)src;
+    unsigned char* d = (unsigned char*)dest;
+    for(size_t i = 0; i < count; i++) {
+        d[i] = s[i];
+    }
+}
+
+void* allocate_copy_free(Block* block, void* ptr, size_t alloc_size, size_t copy_size) {
+    //allocate new block
+    void* new_ptr = js_alloc(block, alloc_size);
+    //edge case
+    if(!new_ptr) {
+        std::cout << "Realloc copy free failed\n";
+        return nullptr;
+    }
+    //copy old contents
+    js_memcpy(new_ptr, ptr, copy_size);
+    //free old block    
+    js_dealloc(block, ptr);
+    //return
+    return new_ptr;
+}
+
+void* js_realloc(Block* block, void* ptr, size_t size) {
+    //if first time allocation, pass to malloc
+    if(!ptr) {
+        return js_alloc(block, size);
+    }
+    //check size
+    if(size == 0) {
+        js_dealloc(block, ptr);
+        return js_alloc(block, size);
+    }
+    Header* h = ((Header*)ptr - 1);
+    size_t current_payload = h->size - sizeof(Header);
+    //compare current ptr size and realloc size to check if memory needs to be shrunken or grown
+    if(current_payload >= size) { // check for shrinking
+        if(current_payload == size) {
+            return ptr;
+        } 
+        size_t required = sizeof(Header) + align_bytes(size);
+        size_t remaining = h->size - required;
+        if(remaining >= sizeof(FreeBlock)) {
+            //shrink current block to that size
+            h->size = required;
+            //if remaining is greater than we can split it and add remaining to free list.
+            //compute the address of the new free block 
+            uintptr_t leftover_addr = (uintptr_t)h + required;
+            FreeBlock* leftover = (FreeBlock*)leftover_addr;
+            leftover->header.size = remaining;
+            //insert leftover in free list
+            insert_free_block(block, leftover);
+        }
+        return ptr;
+    }
+    //growing the memory
+    //get the next block addr and check if its free
+    uintptr_t next_addr = (uintptr_t)h + h->size;
+    FreeBlock* prev = nullptr;
+    FreeBlock* temp = block->freelist;
+    while(temp) {
+        if(next_addr == (uintptr_t)temp) {
+            break;
+        }
+        prev = temp;
+        temp = temp->next;
+    }
+    if(!temp) {
+        //next block is not free, need to move ptr to the location where requested size can be allocated
+        size_t min_size = (current_payload < size) ? current_payload : size;
+        return allocate_copy_free(block, ptr, size, min_size);
+    } else {
+        //next block is free
+        size_t combined = h->size + temp->header.size;
+        size_t required = sizeof(Header) + align_bytes(size);
+        if(combined >= required) {
+            //grow the current block to fit the size 
+            size_t remaining = combined - required;
+            if(remaining >= sizeof(FreeBlock)) {
+                //the next block has extra memory, where some part can be allocated and the rest can be free
+                h->size = required; 
+                //delete temp from free list 
+                if(temp == block->freelist) {
+                    block->freelist = temp->next;
+                } else {
+                    prev->next = temp->next;
+                }
+                uintptr_t leftover_addr = (uintptr_t)h + required;
+                FreeBlock* leftover = (FreeBlock*)leftover_addr;
+                leftover->header.size = remaining;  
+                insert_free_block(block, leftover);
+            } else {
+                //resize h to fill full combined bytes
+                //delete temp
+                if(temp == block->freelist) {
+                    block->freelist = temp->next;
+                } else {
+                    prev->next = temp->next;
+                }
+                h->size = combined;
+            }
+            return ptr;
+        } else {
+            size_t min_size = (current_payload < size) ? current_payload : size;
+            return allocate_copy_free(block, ptr, size, min_size);
+        }
+    }
 }

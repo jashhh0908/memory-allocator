@@ -27,3 +27,5 @@ void* bump_alloc(Block* block, size_t bytes);
 void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr);
 void* js_calloc(Block* block, size_t count, size_t size);
 void js_memset(void* ptr, int value, size_t count);
+void* js_realloc(Block* block, void* ptr, size_t size);
+void js_memcpy( void* dest, void* src, size_t count);

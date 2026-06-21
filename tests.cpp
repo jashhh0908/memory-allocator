@@ -5,6 +5,7 @@ void alloc_test(Block block);
 void sort_test(Block block);
 void coalesce_test(Block block);
 void calloc_test(Block block);
+void realloc_test(Block block);
 
 int main() {
     Block block;
@@ -15,7 +16,7 @@ int main() {
     block.used = 0;
     block.freelist = nullptr;
     
-    calloc_test(block);
+    realloc_test(block);
     return 0;
 }
 
@@ -149,4 +150,256 @@ void coalesce_test(Block block) {
     for(FreeBlock* curr = block.freelist; curr; curr = curr->next) {
         std::cout << curr << " size = " << curr->header.size << '\n';
     }
+}
+
+void realloc_test(Block) {
+
+// Test 1: realloc(nullptr, size)
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* p = (int*)js_realloc(&block, nullptr, 40);
+
+    std::cout << "Test 1 (nullptr realloc): "
+              << (p != nullptr ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 2: grow in place
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    bool pass = true;
+
+    int* grow = (int*)js_alloc(&block, 40);
+    for(int i = 0; i < 10; i++) grow[i] = i;
+
+    void* adjacent = js_alloc(&block, 100);
+    js_dealloc(&block, adjacent);
+
+    int* old = grow;
+    grow = (int*)js_realloc(&block, grow, 80);
+
+    pass = (grow == old);
+
+    for(int i = 0; i < 10; i++) {
+        if(grow[i] != i) pass = false;
+    }
+
+    std::cout << "Test 2 (grow in place): "
+              << (pass ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 3: grow by moving
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    bool pass = true;
+
+    int* move = (int*)js_alloc(&block, 40);
+
+    for(int i = 0; i < 10; i++) {
+        move[i] = i + 100;
+    }
+
+    js_alloc(&block, 40);
+
+    int* moved = (int*)js_realloc(&block, move, 200);
+
+    pass = (moved != nullptr);
+
+    for(int i = 0; i < 10; i++) {
+        if(moved[i] != i + 100) pass = false;
+    }
+
+    std::cout << "Test 3 (grow by moving): "
+              << (pass ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 4: shrink
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* shrink = (int*)js_alloc(&block, 128);
+    void* before = shrink;
+
+    shrink = (int*)js_realloc(&block, shrink, 32);
+
+    std::cout << "Test 4 (shrink): "
+              << ((void*)shrink == before ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 5: same size
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* same = (int*)js_alloc(&block, 64);
+    void* before = same;
+
+    same = (int*)js_realloc(&block, same, 64);
+
+    std::cout << "Test 5 (same size): "
+              << ((void*)same == before ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 6: size 0
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* zero = (int*)js_alloc(&block, 64);
+
+    void* result = js_realloc(&block, zero, 0);
+
+    std::cout << "Test 6 (size 0): "
+              << (result != nullptr ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 7: allocation failure
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    void* huge = js_alloc(&block, 128);
+
+    void* failed = js_realloc(&block, huge, 100000);
+
+    std::cout << "Test 7 (failure handling): "
+              << (failed == nullptr ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 8: data preservation
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    bool pass = true;
+
+    char* data = (char*)js_alloc(&block, 16);
+
+    for(int i = 0; i < 16; i++) {
+        data[i] = 'A' + i;
+    }
+
+    js_alloc(&block, 32);
+
+    char* data2 = (char*)js_realloc(&block, data, 128);
+
+    for(int i = 0; i < 16; i++) {
+        if(data2[i] != 'A' + i) pass = false;
+    }
+
+    std::cout << "Test 8 (data preservation): "
+              << (pass ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 9: grow in place with split
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* p = (int*)js_alloc(&block, 32);
+
+    void* big = js_alloc(&block, 128);
+    js_dealloc(&block, big);
+
+    void* old = p;
+
+    p = (int*)js_realloc(&block, p, 64);
+
+    std::cout << "Test 9 (grow in place with split): "
+              << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 10: grow in place without split
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    int* p = (int*)js_alloc(&block, 32);
+
+    void* small = js_alloc(&block, 32);
+    js_dealloc(&block, small);
+
+    void* old = p;
+
+    p = (int*)js_realloc(&block, p, 56);
+
+    std::cout << "Test 10 (grow in place without split): "
+              << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+}
+
+// Test 11: repeated realloc chain
+{
+    Block block;
+    char memory[1024];
+    block.ptr = memory;
+    block.capacity = 1024;
+    block.used = 0;
+    block.freelist = nullptr;
+
+    bool pass = true;
+
+    int* p = (int*)js_alloc(&block, 16);
+
+    for(int i = 0; i < 4; i++) {
+        p[i] = i + 1;
+    }
+
+    p = (int*)js_realloc(&block, p, 64);
+    p = (int*)js_realloc(&block, p, 128);
+    p = (int*)js_realloc(&block, p, 24);
+    p = (int*)js_realloc(&block, p, 80);
+
+    for(int i = 0; i < 4; i++) {
+        if(p[i] != i + 1) pass = false;
+    }
+
+    std::cout << "Test 11 (repeated realloc chain): "
+              << (pass ? "PASS" : "FAIL") << '\n';
+}
 }
