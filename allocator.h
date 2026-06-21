@@ -21,7 +21,9 @@ struct Block {
 };
 
 size_t align_bytes(size_t bytes);
-void* alloc(Block* block, size_t bytes);
-void dealloc(Block* block, void* ptr);
+void* js_alloc(Block* block, size_t bytes);
+void js_dealloc(Block* block, void* ptr);
 void* bump_alloc(Block* block, size_t bytes);
 void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr);
+void* js_calloc(Block* block, size_t count, size_t size);
+void js_memset(void* ptr, int value, size_t count);

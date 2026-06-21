@@ -33,7 +33,7 @@ void* bump_alloc(Block* block, size_t bytes) {
     return (void*)(h + 1); // moves the pointer by sizeof(Header)
 }
 
-void* alloc(Block *block, size_t bytes) {
+void* js_alloc(Block *block, size_t bytes) {
     //1. Search the free list
     FreeBlock* prev = nullptr;
     FreeBlock* temp = block->freelist;
@@ -92,7 +92,7 @@ void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
     }
 }
 
-void dealloc(Block *block, void *ptr) {
+void js_dealloc(Block *block, void *ptr) {
     Header* h = ((Header*)ptr - 1);
     FreeBlock* add = (FreeBlock*)h;
     add->next = nullptr;
@@ -125,3 +125,25 @@ void dealloc(Block *block, void *ptr) {
     add->next = curr;
     coalesce(prev, add, curr);
 }   
+
+void js_memset(void* ptr, int value, size_t count) {
+    unsigned char* p = (unsigned char*)ptr;
+    for(size_t i = 0; i < count; i++) {
+        p[i] = value;
+    }
+}
+
+void* js_calloc(Block* block, size_t count, size_t size) {
+    //check if the total size requested is within the limit
+    if(size != 0 && count > SIZE_MAX / size) {
+        return nullptr;
+    }
+    size_t total = count * size;
+    void* ptr = js_alloc(block, total);
+    if(!ptr) {
+        std::cout << "calloc failed\n";
+        return nullptr;
+    }
+    js_memset(ptr, 0, total);
+    return ptr;
+}
