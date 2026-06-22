@@ -25,11 +25,13 @@ void* bump_alloc(Block* block, size_t bytes) {
     size_t padding = addr - current_addr;
     if(total_size + padding > block->capacity - block->used) {
         std::cout << "Allocation failed: insufficient memory" << std::endl;
+        block->stats.failed_allocations++;
         return nullptr;
     }
     Header *h = (Header*)addr;
     h->size = total_size;
     block->used += total_size + padding;
+    block->stats.total_allocations++;
     return (void*)(h + 1); // moves the pointer by sizeof(Header)
 }
 
@@ -60,6 +62,7 @@ void* js_alloc(Block *block, size_t bytes) {
                 prev->next = leftover;
             }
             leftover->next = next;
+            block->stats.total_allocations++;
             return (void*)((uintptr_t)temp + sizeof(Header));
         } else {
             if(temp == block->freelist) {
@@ -68,6 +71,7 @@ void* js_alloc(Block *block, size_t bytes) {
             } else {
                 prev->next = temp->next;
             }
+            block->stats.total_allocations++;
             return (void*)((uintptr_t)temp + sizeof(Header));
         }
     } else {
@@ -128,6 +132,7 @@ void js_dealloc(Block *block, void *ptr) {
     Header* h = ((Header*)ptr - 1);
     FreeBlock* add = (FreeBlock*)h;
     insert_free_block(block, add);
+    block->stats.total_frees++;
 }   
 
 void js_memset(void* ptr, int value, size_t count) {

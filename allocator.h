@@ -13,11 +13,21 @@ struct FreeBlock {
     FreeBlock* next; //store address of next free block
 };
 
+struct Stats {
+    size_t current_allocated_bytes = 0; //bytes allocated to the user (does not include overhead)
+    size_t current_consumed_bytes = 0; //bytes allocated to the user + overhead
+    size_t peak_allocated_bytes = 0; //max bytes ever requested by the user
+    size_t total_allocations = 0;
+    size_t total_frees = 0;
+    size_t failed_allocations = 0;
+};
+
 struct Block {
     void* ptr; //starting address of the block
     size_t capacity; //total size 
     size_t used; //amt of the size used
     FreeBlock *freelist; //track the amount of free blocks
+    Stats stats;
 };
 
 size_t align_bytes(size_t bytes);

@@ -6,6 +6,7 @@ void sort_test(Block block);
 void coalesce_test(Block block);
 void calloc_test(Block block);
 void realloc_test(Block block);
+void stats_test(Block block);
 
 int main() {
     Block block;
@@ -16,7 +17,7 @@ int main() {
     block.used = 0;
     block.freelist = nullptr;
     
-    realloc_test(block);
+    stats_test(block);
     return 0;
 }
 
@@ -402,4 +403,24 @@ void realloc_test(Block) {
     std::cout << "Test 11 (repeated realloc chain): "
               << (pass ? "PASS" : "FAIL") << '\n';
 }
+}
+
+void stats_test(Block block) {
+    js_alloc(&block, 32);
+    js_alloc(&block, 64);
+    js_alloc(&block, 128);
+    js_alloc(&block, block.capacity * 10); // guaranteed fail
+
+    void* p1 = js_alloc(&block, 32);
+    void* p2 = js_alloc(&block, 64);
+    js_dealloc(&block, p1);
+    js_dealloc(&block, p2);
+
+    bool pass = (block.stats.total_allocations == 5) && (block.stats.failed_allocations == 1) && (block.stats.total_frees == 2);
+
+    std::cout << "Stats Test (alloc counters): " << (pass ? "PASS" : "FAIL") << std::endl;
+
+    std::cout << "Allocations: " << block.stats.total_allocations 
+              << ", Failures: " << block.stats.failed_allocations
+              << ", Frees: " << block.stats.total_frees << std::endl;
 }
