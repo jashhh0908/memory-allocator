@@ -36,3 +36,6 @@ void* js_calloc(Block* block, size_t count, size_t size);
 void js_memset(void* ptr, int value, size_t count);
 void* js_realloc(Block* block, void* ptr, size_t size);
 void js_memcpy( void* dest, void* src, size_t count);
+
+Block js_getBlock(size_t size);
+void js_freeBlock(Block* block);

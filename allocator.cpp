@@ -1,5 +1,6 @@
 #include "allocator.h"
 #include <iostream>
+#include <windows.h>
 
 size_t align_bytes(size_t bytes) {
     const size_t ALIGNMENT = alignof(std::max_align_t); 
@@ -304,4 +305,40 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
             return allocate_copy_free(block, ptr, size, min_size);
         }
     }
+}
+
+void* js_sys_alloc(size_t bytes) {
+    PVOID block = VirtualAlloc(nullptr, bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if(!block) {
+        return nullptr;
+    }
+    return block;
+}
+
+void js_sys_free(void *ptr) {
+    bool pass = VirtualFree(ptr, 0, MEM_RELEASE);
+    if(!pass) {
+        std::cout << "Virtual Free failed\n";
+        return;
+    }
+}
+
+Block js_getBlock(size_t size) {
+    void* ptr = js_sys_alloc(size);
+    Block block;
+    block.ptr = ptr;
+    if(!ptr) {
+        block.capacity = 0;   
+    } else {
+        block.capacity = size;
+    }
+    block.freelist = nullptr;
+    block.used = 0;
+    return block;
+}   
+
+void js_freeBlock(Block* block) {
+    js_sys_free(block->ptr);
+    block->ptr = nullptr;
+    block->capacity = 0;
 }

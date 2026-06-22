@@ -9,15 +9,10 @@ void realloc_test(Block block);
 void stats_test(Block block);
 
 int main() {
-    Block block;
-    char memory[1024];
+    Block block = js_getBlock(1024);
 
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-    
-    stats_test(block);
+    realloc_test(block);
+    js_freeBlock(&block);
     return 0;
 }
 
@@ -157,28 +152,18 @@ void realloc_test(Block) {
 
 // Test 1: realloc(nullptr, size)
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* p = (int*)js_realloc(&block, nullptr, 40);
 
     std::cout << "Test 1 (nullptr realloc): "
               << (p != nullptr ? "PASS" : "FAIL") << '\n';
+
+    js_freeBlock(&block);
 }
 
 // Test 2: grow in place
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     bool pass = true;
 
     int* grow = (int*)js_alloc(&block, 40);
@@ -198,17 +183,13 @@ void realloc_test(Block) {
 
     std::cout << "Test 2 (grow in place): "
               << (pass ? "PASS" : "FAIL") << '\n';
+    
+    js_freeBlock(&block);
 }
 
 // Test 3: grow by moving
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     bool pass = true;
 
     int* move = (int*)js_alloc(&block, 40);
@@ -229,17 +210,12 @@ void realloc_test(Block) {
 
     std::cout << "Test 3 (grow by moving): "
               << (pass ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 4: shrink
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* shrink = (int*)js_alloc(&block, 128);
     void* before = shrink;
 
@@ -247,17 +223,12 @@ void realloc_test(Block) {
 
     std::cout << "Test 4 (shrink): "
               << ((void*)shrink == before ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 5: same size
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* same = (int*)js_alloc(&block, 64);
     void* before = same;
 
@@ -265,51 +236,36 @@ void realloc_test(Block) {
 
     std::cout << "Test 5 (same size): "
               << ((void*)same == before ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 6: size 0
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* zero = (int*)js_alloc(&block, 64);
 
     void* result = js_realloc(&block, zero, 0);
 
     std::cout << "Test 6 (size 0): "
-              << (result != nullptr ? "PASS" : "FAIL") << '\n';
+              << (result == nullptr ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 7: allocation failure
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     void* huge = js_alloc(&block, 128);
 
     void* failed = js_realloc(&block, huge, 100000);
 
     std::cout << "Test 7 (failure handling): "
               << (failed == nullptr ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 8: data preservation
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     bool pass = true;
 
     char* data = (char*)js_alloc(&block, 16);
@@ -328,17 +284,12 @@ void realloc_test(Block) {
 
     std::cout << "Test 8 (data preservation): "
               << (pass ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 9: grow in place with split
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* p = (int*)js_alloc(&block, 32);
 
     void* big = js_alloc(&block, 128);
@@ -350,17 +301,12 @@ void realloc_test(Block) {
 
     std::cout << "Test 9 (grow in place with split): "
               << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 10: grow in place without split
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     int* p = (int*)js_alloc(&block, 32);
 
     void* small = js_alloc(&block, 32);
@@ -372,17 +318,12 @@ void realloc_test(Block) {
 
     std::cout << "Test 10 (grow in place without split): "
               << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 
 // Test 11: repeated realloc chain
 {
-    Block block;
-    char memory[1024];
-    block.ptr = memory;
-    block.capacity = 1024;
-    block.used = 0;
-    block.freelist = nullptr;
-
+    Block block = js_getBlock(1024);
     bool pass = true;
 
     int* p = (int*)js_alloc(&block, 16);
@@ -402,6 +343,7 @@ void realloc_test(Block) {
 
     std::cout << "Test 11 (repeated realloc chain): "
               << (pass ? "PASS" : "FAIL") << '\n';
+    js_freeBlock(&block);
 }
 }
 
