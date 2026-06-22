@@ -429,25 +429,132 @@ void stats_test(Block block) {
     bool pass2 =
         (block.stats.current_allocated_bytes == 239) &&
         (block.stats.peak_allocated_bytes == 320);
-    
+
     std::cout << "Test 2 (reuse accounting): "
               << (pass2 ? "PASS" : "FAIL") << '\n';
-    
+
     js_dealloc(&block, p3);
-    
+
     bool pass3 =
         (block.stats.current_allocated_bytes == 224) &&
         (block.stats.peak_allocated_bytes == 320);
-    
+
     std::cout << "Test 3 (reuse free): "
               << (pass3 ? "PASS" : "FAIL") << '\n';
-    
+
     std::cout << "\nCurrent Allocated: "
               << block.stats.current_allocated_bytes << '\n';
-    
+
     std::cout << "Current Consumed: "
               << block.stats.current_consumed_bytes << '\n';
-    
+
     std::cout << "Peak Allocated: "
               << block.stats.peak_allocated_bytes << '\n';
+
+    // Realloc metric tests
+
+    void* p4 = js_alloc(&block, 15);
+
+    size_t alloc_before = block.stats.current_allocated_bytes;
+    size_t consumed_before = block.stats.current_consumed_bytes;
+
+    p4 = js_realloc(&block, p4, 10);
+
+    bool pass4 =
+        (block.stats.current_allocated_bytes == alloc_before - 5) &&
+        (block.stats.current_consumed_bytes == consumed_before);
+
+    std::cout << "Test 4 (logical shrink): "
+              << (pass4 ? "PASS" : "FAIL") << '\n';
+
+    size_t alloc_before2 = block.stats.current_allocated_bytes;
+    size_t consumed_before2 = block.stats.current_consumed_bytes;
+
+    p4 = js_realloc(&block, p4, 16);
+
+    bool pass5 =
+        (block.stats.current_allocated_bytes == alloc_before2 + 6) &&
+        (block.stats.current_consumed_bytes == consumed_before2);
+
+    std::cout << "Test 5 (logical growth): "
+              << (pass5 ? "PASS" : "FAIL") << '\n';
+
+    void* p5 = js_alloc(&block, 128);
+
+    size_t alloc_before3 = block.stats.current_allocated_bytes;
+    size_t consumed_before3 = block.stats.current_consumed_bytes;
+
+    p5 = js_realloc(&block, p5, 32);
+
+    bool pass6 =
+        (block.stats.current_allocated_bytes == alloc_before3 - 96) &&
+        (block.stats.current_consumed_bytes < consumed_before3);
+
+    std::cout << "Test 6 (physical shrink): "
+              << (pass6 ? "PASS" : "FAIL") << '\n';
+
+    std::cout << "\nCurrent Allocated: "
+              << block.stats.current_allocated_bytes << '\n';
+
+    std::cout << "Current Consumed: "
+              << block.stats.current_consumed_bytes << '\n';
+
+    std::cout << "Peak Allocated: "
+              << block.stats.peak_allocated_bytes << '\n';
+
+    void* p6 = js_alloc(&block, 32);
+    void* adjacent = js_alloc(&block, 128);
+    
+    js_dealloc(&block, adjacent);
+    
+    size_t alloc_before4 = block.stats.current_allocated_bytes;
+    size_t consumed_before4 = block.stats.current_consumed_bytes;
+    size_t peak_before4 = block.stats.peak_allocated_bytes;
+    
+    p6 = js_realloc(&block, p6, 80);
+    
+    bool pass7 =
+        (block.stats.current_allocated_bytes == alloc_before4 + 48) &&
+        (block.stats.current_consumed_bytes > consumed_before4) &&
+        (block.stats.peak_allocated_bytes >= peak_before4);
+    
+    std::cout << "Test 7 (in-place growth): "
+              << (pass7 ? "PASS" : "FAIL") << '\n';
+
+    void* p7 = js_alloc(&block, 32);
+    js_alloc(&block, 32); // prevent in-place growth
+
+    size_t alloc_before5 = block.stats.current_allocated_bytes;
+    size_t consumed_before5 = block.stats.current_consumed_bytes;
+    size_t peak_before5 = block.stats.peak_allocated_bytes;
+
+    p7 = js_realloc(&block, p7, 200);
+
+    bool pass8 =
+        (block.stats.current_allocated_bytes == alloc_before5 + 168) &&
+        (block.stats.current_consumed_bytes > consumed_before5) &&
+        (block.stats.peak_allocated_bytes >= peak_before5);
+
+    std::cout << "Test 8 (allocate-copy-free growth): "
+              << (pass8 ? "PASS" : "FAIL") << '\n';
+
+    void* p8 = js_alloc(&block, 32);
+
+    size_t alloc_before6 = block.stats.current_allocated_bytes;
+    size_t consumed_before6 = block.stats.current_consumed_bytes;
+    size_t peak_before6 = block.stats.peak_allocated_bytes;
+    size_t failed_before6 = block.stats.failed_allocations;
+    
+    void* failed = js_realloc(&block, p8, block.capacity * 100);
+    
+    bool pass9 =
+        (failed == nullptr) &&
+        (block.stats.current_allocated_bytes == alloc_before6) &&
+        (block.stats.current_consumed_bytes == consumed_before6) &&
+        (block.stats.peak_allocated_bytes == peak_before6) &&
+        (block.stats.failed_allocations == failed_before6 + 1);
+    
+    std::cout << "Test 9 (failed realloc): "
+              << (pass9 ? "PASS" : "FAIL") << '\n';
 }
+

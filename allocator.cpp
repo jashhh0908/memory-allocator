@@ -165,6 +165,7 @@ void js_memset(void* ptr, int value, size_t count) {
 void* js_calloc(Block* block, size_t count, size_t size) {
     //check if the total size requested is within the limit
     if(size != 0 && count > SIZE_MAX / size) {
+        block->stats.failed_allocations++;
         return nullptr;
     }
     size_t total = count * size;
@@ -209,20 +210,31 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
     //check size
     if(size == 0) {
         js_dealloc(block, ptr);
-        return js_alloc(block, size);
+        return nullptr;
     }
     Header* h = ((Header*)ptr - 1);
+    //for metric calculation
+    size_t old_payload_size = h->requested_size;
+    size_t old_physical_size = h->size;
     size_t current_payload = h->size - sizeof(Header);
     //compare current ptr size and realloc size to check if memory needs to be shrunken or grown
     if(current_payload >= size) { // check for shrinking
-        if(current_payload == size) {
+        if(h->requested_size == size) {
             return ptr;
         } 
         size_t required = sizeof(Header) + align_bytes(size);
         size_t remaining = h->size - required;
+        
+        if(size > old_payload_size) {
+            block->stats.current_allocated_bytes += (size - old_payload_size);
+        } else {
+            block->stats.current_allocated_bytes -= (old_payload_size - size);
+        }
+        h->requested_size = size;
         if(remaining >= sizeof(FreeBlock)) {
             //shrink current block to that size
             h->size = required;
+            block->stats.current_consumed_bytes -= (old_physical_size - h->size);
             //if remaining is greater than we can split it and add remaining to free list.
             //compute the address of the new free block 
             uintptr_t leftover_addr = (uintptr_t)h + required;
@@ -256,9 +268,14 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
         if(combined >= required) {
             //grow the current block to fit the size 
             size_t remaining = combined - required;
+            block->stats.current_allocated_bytes += (size - old_payload_size);
+            h->requested_size = size;
+
             if(remaining >= sizeof(FreeBlock)) {
                 //the next block has extra memory, where some part can be allocated and the rest can be free
                 h->size = required; 
+                block->stats.current_consumed_bytes += (h->size - old_physical_size);
+
                 //delete temp from free list 
                 if(temp == block->freelist) {
                     block->freelist = temp->next;
@@ -278,7 +295,9 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
                     prev->next = temp->next;
                 }
                 h->size = combined;
+                block->stats.current_consumed_bytes += (h->size - old_physical_size);
             }
+            block->stats.peak_allocated_bytes = std::max(block->stats.current_allocated_bytes, block->stats.peak_allocated_bytes);
             return ptr;
         } else {
             size_t min_size = (current_payload < size) ? current_payload : size;
