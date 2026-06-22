@@ -29,8 +29,13 @@ void* bump_alloc(Block* block, size_t bytes) {
         return nullptr;
     }
     Header *h = (Header*)addr;
+    h->requested_size = bytes;
     h->size = total_size;
     block->used += total_size + padding;
+    //update metrics
+    block->stats.current_allocated_bytes += h->requested_size;
+    block->stats.current_consumed_bytes += h->size;
+    block->stats.peak_allocated_bytes = std::max(block->stats.peak_allocated_bytes, block->stats.current_allocated_bytes);
     block->stats.total_allocations++;
     return (void*)(h + 1); // moves the pointer by sizeof(Header)
 }
@@ -50,11 +55,13 @@ void* js_alloc(Block *block, size_t bytes) {
     }
     if(temp) {
         size_t remaining_size = temp->header.size - required;
+        temp->header.requested_size = bytes;
         temp->header.size = required;
         FreeBlock* next = temp->next;
         if(remaining_size >= sizeof(FreeBlock)) {
             uintptr_t leftover_addr = (uintptr_t)temp + required;
             FreeBlock* leftover = (FreeBlock*)leftover_addr;
+            leftover->header.requested_size = 0;
             leftover->header.size = remaining_size;
             if(temp == block->freelist) {
                 block->freelist = leftover;
@@ -62,15 +69,23 @@ void* js_alloc(Block *block, size_t bytes) {
                 prev->next = leftover;
             }
             leftover->next = next;
+            //update metrics
+            block->stats.current_allocated_bytes += temp->header.requested_size;
+            block->stats.current_consumed_bytes += temp->header.size;
+            block->stats.peak_allocated_bytes = std::max(block->stats.peak_allocated_bytes, block->stats.current_allocated_bytes);
             block->stats.total_allocations++;
             return (void*)((uintptr_t)temp + sizeof(Header));
         } else {
+            temp->header.size = required + remaining_size;
             if(temp == block->freelist) {
                 //first block is free
                 block->freelist = temp->next;
             } else {
                 prev->next = temp->next;
             }
+            block->stats.current_allocated_bytes += temp->header.requested_size;
+            block->stats.current_consumed_bytes += temp->header.size;
+            block->stats.peak_allocated_bytes = std::max(block->stats.peak_allocated_bytes, block->stats.current_allocated_bytes);
             block->stats.total_allocations++;
             return (void*)((uintptr_t)temp + sizeof(Header));
         }
@@ -130,6 +145,11 @@ void insert_free_block(Block* block, FreeBlock* add) {
 
 void js_dealloc(Block *block, void *ptr) {
     Header* h = ((Header*)ptr - 1);
+    //update metrics
+    block->stats.current_allocated_bytes -= h->requested_size;
+    block->stats.current_consumed_bytes -= h->size;
+
+    h->requested_size = 0;
     FreeBlock* add = (FreeBlock*)h;
     insert_free_block(block, add);
     block->stats.total_frees++;

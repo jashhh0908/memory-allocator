@@ -416,11 +416,38 @@ void stats_test(Block block) {
     js_dealloc(&block, p1);
     js_dealloc(&block, p2);
 
-    bool pass = (block.stats.total_allocations == 5) && (block.stats.failed_allocations == 1) && (block.stats.total_frees == 2);
+    bool pass1 = (block.stats.total_allocations == 5) && (block.stats.failed_allocations == 1) && (block.stats.total_frees == 2);
 
-    std::cout << "Stats Test (alloc counters): " << (pass ? "PASS" : "FAIL") << std::endl;
+    std::cout << "Stats Test 1 (alloc counters): " << (pass1 ? "PASS" : "FAIL") << std::endl;
 
     std::cout << "Allocations: " << block.stats.total_allocations 
               << ", Failures: " << block.stats.failed_allocations
               << ", Frees: " << block.stats.total_frees << std::endl;
+
+    void* p3 = js_alloc(&block, 15);
+
+    bool pass2 =
+        (block.stats.current_allocated_bytes == 239) &&
+        (block.stats.peak_allocated_bytes == 320);
+    
+    std::cout << "Test 2 (reuse accounting): "
+              << (pass2 ? "PASS" : "FAIL") << '\n';
+    
+    js_dealloc(&block, p3);
+    
+    bool pass3 =
+        (block.stats.current_allocated_bytes == 224) &&
+        (block.stats.peak_allocated_bytes == 320);
+    
+    std::cout << "Test 3 (reuse free): "
+              << (pass3 ? "PASS" : "FAIL") << '\n';
+    
+    std::cout << "\nCurrent Allocated: "
+              << block.stats.current_allocated_bytes << '\n';
+    
+    std::cout << "Current Consumed: "
+              << block.stats.current_consumed_bytes << '\n';
+    
+    std::cout << "Peak Allocated: "
+              << block.stats.peak_allocated_bytes << '\n';
 }

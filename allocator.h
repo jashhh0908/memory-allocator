@@ -5,7 +5,7 @@
 
 struct Header {
     size_t size; //total blocks size (sizeof(header) + bytes) inside of the main chunk
-    size_t padding; //to make it 8 bytes
+    size_t requested_size; //size requested by user (does not include sizeof(Header))
 };
 
 struct FreeBlock {
@@ -30,11 +30,8 @@ struct Block {
     Stats stats;
 };
 
-size_t align_bytes(size_t bytes);
 void* js_alloc(Block* block, size_t bytes);
 void js_dealloc(Block* block, void* ptr);
-void* bump_alloc(Block* block, size_t bytes);
-void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr);
 void* js_calloc(Block* block, size_t count, size_t size);
 void js_memset(void* ptr, int value, size_t count);
 void* js_realloc(Block* block, void* ptr, size_t size);
