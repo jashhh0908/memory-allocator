@@ -30,12 +30,14 @@ struct Block {
     Stats stats;
 };
 
-void* js_alloc(Block* block, size_t bytes);
-void js_dealloc(Block* block, void* ptr);
-void* js_calloc(Block* block, size_t count, size_t size);
+void* js_alloc(size_t bytes);
+void js_dealloc(void* ptr);
+void* js_calloc(size_t count, size_t size);
 void js_memset(void* ptr, int value, size_t count);
-void* js_realloc(Block* block, void* ptr, size_t size);
+void* js_realloc(void* ptr, size_t size);
 void js_memcpy( void* dest, void* src, size_t count);
 
 Block js_getBlock(size_t size);
 void js_freeBlock(Block* block);
+const Stats& get_stats();
+void js_reset_allocator();

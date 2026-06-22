@@ -2,6 +2,10 @@
 #include <iostream>
 #include <windows.h>
 
+const size_t BLOCK_SIZE = 1024 * 4;
+static Block g_allocator; //internal global allocator
+static bool g_allocator_initialized = false;
+
 size_t align_bytes(size_t bytes) {
     const size_t ALIGNMENT = alignof(std::max_align_t); 
     return ((bytes + ALIGNMENT - 1) & ~(ALIGNMENT - 1));
@@ -41,7 +45,7 @@ void* bump_alloc(Block* block, size_t bytes) {
     return (void*)(h + 1); // moves the pointer by sizeof(Header)
 }
 
-void* js_alloc(Block *block, size_t bytes) {
+void* _internal_alloc(Block *block, size_t bytes) {
     //1. Search the free list
     FreeBlock* prev = nullptr;
     FreeBlock* temp = block->freelist;
@@ -96,6 +100,14 @@ void* js_alloc(Block *block, size_t bytes) {
     }
 }
 
+void* js_alloc(size_t bytes) {
+    if(!g_allocator_initialized) {
+        g_allocator = js_getBlock(BLOCK_SIZE);
+        g_allocator_initialized = true;
+    }
+    return _internal_alloc(&g_allocator, bytes);
+}
+
 void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
     if(curr == nullptr) {
         uintptr_t end_prev = (uintptr_t)prev + prev->header.size;
@@ -144,16 +156,16 @@ void insert_free_block(Block* block, FreeBlock* add) {
     coalesce(prev, add, curr);
 }
 
-void js_dealloc(Block *block, void *ptr) {
+void js_dealloc(void *ptr) {
     Header* h = ((Header*)ptr - 1);
     //update metrics
-    block->stats.current_allocated_bytes -= h->requested_size;
-    block->stats.current_consumed_bytes -= h->size;
+    g_allocator.stats.current_allocated_bytes -= h->requested_size;
+    g_allocator.stats.current_consumed_bytes -= h->size;
 
     h->requested_size = 0;
     FreeBlock* add = (FreeBlock*)h;
-    insert_free_block(block, add);
-    block->stats.total_frees++;
+    insert_free_block(&g_allocator, add);
+    g_allocator.stats.total_frees++;
 }   
 
 void js_memset(void* ptr, int value, size_t count) {
@@ -163,14 +175,14 @@ void js_memset(void* ptr, int value, size_t count) {
     }
 }
 
-void* js_calloc(Block* block, size_t count, size_t size) {
+void* js_calloc(size_t count, size_t size) {
     //check if the total size requested is within the limit
     if(size != 0 && count > SIZE_MAX / size) {
-        block->stats.failed_allocations++;
+        g_allocator.stats.failed_allocations++;
         return nullptr;
     }
     size_t total = count * size;
-    void* ptr = js_alloc(block, total);
+    void* ptr = js_alloc(total);
     if(!ptr) {
         std::cout << "calloc failed\n";
         return nullptr;
@@ -187,9 +199,9 @@ void js_memcpy( void* dest, void* src, size_t count) {
     }
 }
 
-void* allocate_copy_free(Block* block, void* ptr, size_t alloc_size, size_t copy_size) {
+void* allocate_copy_free(void* ptr, size_t alloc_size, size_t copy_size) {
     //allocate new block
-    void* new_ptr = js_alloc(block, alloc_size);
+    void* new_ptr = js_alloc(alloc_size);
     //edge case
     if(!new_ptr) {
         std::cout << "Realloc copy free failed\n";
@@ -198,19 +210,19 @@ void* allocate_copy_free(Block* block, void* ptr, size_t alloc_size, size_t copy
     //copy old contents
     js_memcpy(new_ptr, ptr, copy_size);
     //free old block    
-    js_dealloc(block, ptr);
+    js_dealloc(ptr);
     //return
     return new_ptr;
 }
 
-void* js_realloc(Block* block, void* ptr, size_t size) {
-    //if first time allocation, pass to malloc
+void* _internal_realloc(Block *block, void* ptr, size_t size) {
+//if first time allocation, pass to malloc
     if(!ptr) {
-        return js_alloc(block, size);
+        return js_alloc(size);
     }
     //check size
     if(size == 0) {
-        js_dealloc(block, ptr);
+        js_dealloc(ptr);
         return nullptr;
     }
     Header* h = ((Header*)ptr - 1);
@@ -261,7 +273,7 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
     if(!temp) {
         //next block is not free, need to move ptr to the location where requested size can be allocated
         size_t min_size = (current_payload < size) ? current_payload : size;
-        return allocate_copy_free(block, ptr, size, min_size);
+        return allocate_copy_free(ptr, size, min_size);
     } else {
         //next block is free
         size_t combined = h->size + temp->header.size;
@@ -302,9 +314,17 @@ void* js_realloc(Block* block, void* ptr, size_t size) {
             return ptr;
         } else {
             size_t min_size = (current_payload < size) ? current_payload : size;
-            return allocate_copy_free(block, ptr, size, min_size);
+            return allocate_copy_free(ptr, size, min_size);
         }
     }
+}
+
+void* js_realloc(void* ptr, size_t size) {
+    if(!g_allocator_initialized) {
+        g_allocator = js_getBlock(BLOCK_SIZE);
+        g_allocator_initialized = true;
+    }
+    return _internal_realloc(&g_allocator, ptr, size);
 }
 
 void* js_sys_alloc(size_t bytes) {
@@ -341,4 +361,15 @@ void js_freeBlock(Block* block) {
     js_sys_free(block->ptr);
     block->ptr = nullptr;
     block->capacity = 0;
+}
+
+const Stats& get_stats() {
+    return g_allocator.stats;
+}
+
+void js_reset_allocator() {
+    if (g_allocator_initialized) {
+        js_freeBlock(&g_allocator);
+        g_allocator_initialized = false;
+    }
 }
