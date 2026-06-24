@@ -36,6 +36,7 @@ void* bump_alloc(Block* block, size_t bytes) {
     Header *h = (Header*)addr;
     h->requested_size = bytes;
     h->size = total_size;
+    h->_free = false;
     block->used += total_size + padding;
     //update metrics
     block->stats.current_allocated_bytes += h->requested_size;
@@ -62,12 +63,14 @@ void* _internal_alloc(Block *block, size_t bytes) {
         size_t remaining_size = temp->header.size - required;
         temp->header.requested_size = bytes;
         temp->header.size = required;
+        temp->header._free = false;
         FreeBlock* next = temp->next;
         if(remaining_size >= sizeof(FreeBlock)) {
             uintptr_t leftover_addr = (uintptr_t)temp + required;
             FreeBlock* leftover = (FreeBlock*)leftover_addr;
             leftover->header.requested_size = 0;
             leftover->header.size = remaining_size;
+            leftover->header._free = true;
             if(temp == block->freelist) {
                 block->freelist = leftover;
             } else {
@@ -156,16 +159,26 @@ void insert_free_block(Block* block, FreeBlock* add) {
     coalesce(prev, add, curr);
 }
 
-void js_dealloc(void *ptr) {
+void _internal_dealloc(Block *block, void* ptr) {
     Header* h = ((Header*)ptr - 1);
+    if(h->_free) {
+        std::cerr << "Error: double free on already freed pointer " << ptr << std::endl;
+        return;
+    }
     //update metrics
-    g_allocator.stats.current_allocated_bytes -= h->requested_size;
-    g_allocator.stats.current_consumed_bytes -= h->size;
+    block->stats.current_allocated_bytes -= h->requested_size;
+    block->stats.current_consumed_bytes -= h->size;
 
     h->requested_size = 0;
+    h->_free = true;
     FreeBlock* add = (FreeBlock*)h;
-    insert_free_block(&g_allocator, add);
-    g_allocator.stats.total_frees++;
+    insert_free_block(block, add);
+    block->stats.total_frees++;
+}
+
+void js_dealloc(void *ptr) {
+    if(!ptr) return;
+    _internal_dealloc(&g_allocator, ptr);
 }   
 
 void js_memset(void* ptr, int value, size_t count) {
@@ -244,6 +257,7 @@ void* _internal_realloc(Block *block, void* ptr, size_t size) {
             block->stats.current_allocated_bytes -= (old_payload_size - size);
         }
         h->requested_size = size;
+        //check if shrinking gives us a free block
         if(remaining >= sizeof(FreeBlock)) {
             //shrink current block to that size
             h->size = required;
@@ -253,6 +267,8 @@ void* _internal_realloc(Block *block, void* ptr, size_t size) {
             uintptr_t leftover_addr = (uintptr_t)h + required;
             FreeBlock* leftover = (FreeBlock*)leftover_addr;
             leftover->header.size = remaining;
+            leftover->header.requested_size = 0;
+            leftover->header._free = true;
             //insert leftover in free list
             insert_free_block(block, leftover);
         }
@@ -298,6 +314,8 @@ void* _internal_realloc(Block *block, void* ptr, size_t size) {
                 uintptr_t leftover_addr = (uintptr_t)h + required;
                 FreeBlock* leftover = (FreeBlock*)leftover_addr;
                 leftover->header.size = remaining;  
+                leftover->header.requested_size = 0;
+                leftover->header._free = true;
                 insert_free_block(block, leftover);
             } else {
                 //resize h to fill full combined bytes

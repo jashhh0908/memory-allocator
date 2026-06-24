@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 
-struct Header {
+//to keep sizeof(Header) aligned with the requirements according to 32-bit or 64-bit compilers we use alignas()
+struct alignas(alignof(std::max_align_t)) Header {
     size_t size; //total blocks size (sizeof(header) + bytes) inside of the main chunk
     size_t requested_size; //size requested by user (does not include sizeof(Header))
+    bool _free;
 };
 
 struct FreeBlock {
