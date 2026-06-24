@@ -40,7 +40,7 @@ void* bump_alloc(Block* block, size_t bytes) {
     block->used += total_size + padding;
     //update metrics
     block->stats.current_allocated_bytes += h->requested_size;
-    block->stats.current_consumed_bytes += h->size;
+    block->stats.current_consumed_bytes += h->size + padding;
     block->stats.peak_allocated_bytes = std::max(block->stats.peak_allocated_bytes, block->stats.current_allocated_bytes);
     block->stats.total_allocations++;
     return (void*)(h + 1); // moves the pointer by sizeof(Header)
