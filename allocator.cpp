@@ -37,6 +37,7 @@ void* bump_alloc(Block* block, size_t bytes) {
     h->requested_size = bytes;
     h->size = total_size;
     h->_free = false;
+    h->padding = padding;
     block->used += total_size + padding;
     //update metrics
     block->stats.current_allocated_bytes += h->requested_size;
@@ -78,8 +79,8 @@ void* _internal_alloc(Block *block, size_t bytes) {
             }
             leftover->next = next;
             //update metrics
-            block->stats.current_allocated_bytes += temp->header.requested_size;
-            block->stats.current_consumed_bytes += temp->header.size;
+            block->stats.current_allocated_bytes += bytes;
+            block->stats.current_consumed_bytes += required;
             block->stats.peak_allocated_bytes = std::max(block->stats.peak_allocated_bytes, block->stats.current_allocated_bytes);
             block->stats.total_allocations++;
             return (void*)((uintptr_t)temp + sizeof(Header));
@@ -112,19 +113,20 @@ void* js_alloc(size_t bytes) {
 }
 
 void coalesce(FreeBlock* prev, FreeBlock* add, FreeBlock* curr) {
-    if(curr == nullptr) {
+    if(curr != nullptr) {
+        uintptr_t end_add = (uintptr_t)add + add->header.size;
+        if(end_add == (uintptr_t)curr) {
+            add->header.size += curr->header.size;
+            add->next = curr->next;
+        }
+    }
+    if(prev != nullptr) {
         uintptr_t end_prev = (uintptr_t)prev + prev->header.size;
         if(end_prev == (uintptr_t)add) {
             prev->header.size += add->header.size;
             prev->next = add->next;
         }
-        return;
-    }
-    uintptr_t end_add = (uintptr_t)add + add->header.size;
-    if(end_add == (uintptr_t)curr) {
-        add->header.size += curr->header.size;
-        add->next = curr->next;
-    }
+    }    
 }
 
 void insert_free_block(Block* block, FreeBlock* add) {
@@ -167,10 +169,11 @@ void _internal_dealloc(Block *block, void* ptr) {
     }
     //update metrics
     block->stats.current_allocated_bytes -= h->requested_size;
-    block->stats.current_consumed_bytes -= h->size;
+    block->stats.current_consumed_bytes -= (h->size + h->padding);
 
     h->requested_size = 0;
     h->_free = true;
+    h->padding = 0;
     FreeBlock* add = (FreeBlock*)h;
     insert_free_block(block, add);
     block->stats.total_frees++;
@@ -189,6 +192,10 @@ void js_memset(void* ptr, int value, size_t count) {
 }
 
 void* js_calloc(size_t count, size_t size) {
+    if(!g_allocator_initialized) {
+        g_allocator = js_getBlock(BLOCK_SIZE);
+        g_allocator_initialized = true;
+    }
     //check if the total size requested is within the limit
     if(size != 0 && count > SIZE_MAX / size) {
         g_allocator.stats.failed_allocations++;

@@ -144,21 +144,23 @@ void coalesce_test() {
     void* p1 = js_alloc(100);
     void* p2 = js_alloc(100);
     void* p3 = js_alloc(100);
+    void* p4 = js_alloc(100); 
 
+    Header* h1 = ((Header*)p1 - 1);
+    Header* h2 = ((Header*)p2 - 1);
+    Header* h3 = ((Header*)p3 - 1);
+    size_t expected_size = h1->size + h2->size + h3->size;
+
+    js_dealloc(p1);
+    js_dealloc(p3);
     js_dealloc(p2);
 
-    std::cout << "After freeing p2:\n";
-    for(FreeBlock* curr = js_get_freelist(); curr; curr = curr->next) {
-        std::cout << curr << " size = " << curr->header.size << '\n';
-    }
+    FreeBlock* f = js_get_freelist();
+    // Verify all 3 blocks successfully merged into 1 single block
+    bool pass = (f != nullptr && f->next == nullptr && f->header.size == expected_size);
+    std::cout << "Test 1 (middle block freed last coalesce): " << (pass ? "PASS" : "FAIL") << '\n';
 
-    std::cout << std::endl;
-    js_dealloc(p3);
-    
-    std::cout << "\nAfter freeing p3:\n";
-    for(FreeBlock* curr = js_get_freelist(); curr; curr = curr->next) {
-        std::cout << curr << " size = " << curr->header.size << '\n';
-    }
+    js_dealloc(p4);
 }
 
 void realloc_test() {
@@ -251,6 +253,7 @@ void realloc_test() {
     void* failed = js_realloc(huge, 100000);
 
     std::cout << "Test 7 (failure handling): " << (failed == nullptr ? "PASS" : "FAIL") << '\n';
+    js_dealloc(huge);
 }
 
 // Test 8: data preservation

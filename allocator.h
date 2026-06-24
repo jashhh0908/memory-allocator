@@ -7,7 +7,8 @@
 struct alignas(alignof(std::max_align_t)) Header {
     size_t size; //total blocks size (sizeof(header) + bytes) inside of the main chunk
     size_t requested_size; //size requested by user (does not include sizeof(Header))
-    bool _free;
+    bool _free; // free flag to set the block as free
+    size_t padding; //padding added before the header to align it (for metrics)
 };
 
 struct FreeBlock {
