@@ -1,37 +1,35 @@
 #include "allocator.h"
 #include <iostream>
 
-void alloc_test(Block block);
-void sort_test(Block block);
-void coalesce_test(Block block);
-void calloc_test(Block block);
-void realloc_test(Block block);
-void stats_test(Block block);
+void alloc_test();
+void sort_test();
+void coalesce_test();
+void calloc_test();
+void realloc_test();
+void stats_test();
 
 int main() {
-    Block block = js_getBlock(1024);
-
-    alloc_test(block);
+    alloc_test();
     js_reset_allocator();
 
-    sort_test(block);
+    sort_test();
     js_reset_allocator();
 
-    coalesce_test(block);
+    coalesce_test();
     js_reset_allocator();
 
-    calloc_test(block);
+    calloc_test();
     js_reset_allocator();
 
-    realloc_test(block);
+    realloc_test();
     js_reset_allocator();
 
-    stats_test(block);
+    stats_test();
     js_reset_allocator();
     return 0;
 }
 
-void calloc_test(Block block) {
+void calloc_test() {
     // Test 1: int array
     int* arr = (int*)js_calloc(10, sizeof(int));
     std::cout << "Test 1 (int array): ";
@@ -99,7 +97,7 @@ void calloc_test(Block block) {
 
 }
 
-void alloc_test(Block block) {
+void alloc_test() {
     void* p1 = js_alloc(100);
     std::cout << "p1 = " << p1 << '\n';
 
@@ -123,7 +121,7 @@ void alloc_test(Block block) {
     }
 }
 
-void sort_test(Block block) {
+void sort_test() {
     void* p1 = js_alloc(100);
     void* p2 = js_alloc(100);
     void* p3 = js_alloc(100);
@@ -135,14 +133,14 @@ void sort_test(Block block) {
 
     std::cout << "\nFree list:\n";
 
-    FreeBlock* curr = block.freelist;
+    FreeBlock* curr = js_get_freelist();
     while(curr) {
         std::cout << (void*)curr << '\n';
         curr = curr->next;
     }
 }
 
-void coalesce_test(Block block) {
+void coalesce_test() {
     void* p1 = js_alloc(100);
     void* p2 = js_alloc(100);
     void* p3 = js_alloc(100);
@@ -150,7 +148,7 @@ void coalesce_test(Block block) {
     js_dealloc(p2);
 
     std::cout << "After freeing p2:\n";
-    for(FreeBlock* curr = block.freelist; curr; curr = curr->next) {
+    for(FreeBlock* curr = js_get_freelist(); curr; curr = curr->next) {
         std::cout << curr << " size = " << curr->header.size << '\n';
     }
 
@@ -158,19 +156,18 @@ void coalesce_test(Block block) {
     js_dealloc(p3);
     
     std::cout << "\nAfter freeing p3:\n";
-    for(FreeBlock* curr = block.freelist; curr; curr = curr->next) {
+    for(FreeBlock* curr = js_get_freelist(); curr; curr = curr->next) {
         std::cout << curr << " size = " << curr->header.size << '\n';
     }
 }
 
-void realloc_test(Block) {
+void realloc_test() {
 
 // Test 1: realloc(nullptr, size)
 {
     int* p = (int*)js_realloc(nullptr, 40);
 
-    std::cout << "Test 1 (nullptr realloc): "
-              << (p != nullptr ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 1 (nullptr realloc): " << (p != nullptr ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 2: grow in place
@@ -192,8 +189,7 @@ void realloc_test(Block) {
         if(grow[i] != i) pass = false;
     }
 
-    std::cout << "Test 2 (grow in place): "
-              << (pass ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 2 (grow in place): " << (pass ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 3: grow by moving
@@ -216,8 +212,7 @@ void realloc_test(Block) {
         if(moved[i] != i + 100) pass = false;
     }
 
-    std::cout << "Test 3 (grow by moving): "
-              << (pass ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 3 (grow by moving): " << (pass ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 4: shrink
@@ -227,8 +222,7 @@ void realloc_test(Block) {
 
     shrink = (int*)js_realloc(shrink, 32);
 
-    std::cout << "Test 4 (shrink): "
-              << ((void*)shrink == before ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 4 (shrink): " << ((void*)shrink == before ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 5: same size
@@ -238,8 +232,7 @@ void realloc_test(Block) {
 
     same = (int*)js_realloc(same, 64);
 
-    std::cout << "Test 5 (same size): "
-              << ((void*)same == before ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 5 (same size): " << ((void*)same == before ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 6: size 0
@@ -248,8 +241,7 @@ void realloc_test(Block) {
 
     void* result = js_realloc(zero, 0);
 
-    std::cout << "Test 6 (size 0): "
-              << (result == nullptr ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 6 (size 0): " << (result == nullptr ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 7: allocation failure
@@ -258,8 +250,7 @@ void realloc_test(Block) {
 
     void* failed = js_realloc(huge, 100000);
 
-    std::cout << "Test 7 (failure handling): "
-              << (failed == nullptr ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 7 (failure handling): " << (failed == nullptr ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 8: data preservation
@@ -280,8 +271,7 @@ void realloc_test(Block) {
         if(data2[i] != 'A' + i) pass = false;
     }
 
-    std::cout << "Test 8 (data preservation): "
-              << (pass ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 8 (data preservation): " << (pass ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 9: grow in place with split
@@ -295,8 +285,7 @@ void realloc_test(Block) {
 
     p = (int*)js_realloc(p, 64);
 
-    std::cout << "Test 9 (grow in place with split): "
-              << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 9 (grow in place with split): " << ((void*)p == old ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 10: grow in place without split
@@ -310,8 +299,7 @@ void realloc_test(Block) {
 
     p = (int*)js_realloc(p, 56);
 
-    std::cout << "Test 10 (grow in place without split): "
-              << ((void*)p == old ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 10 (grow in place without split): " << ((void*)p == old ? "PASS" : "FAIL") << '\n';
 }
 
 // Test 11: repeated realloc chain
@@ -333,16 +321,15 @@ void realloc_test(Block) {
         if(p[i] != i + 1) pass = false;
     }
 
-    std::cout << "Test 11 (repeated realloc chain): "
-              << (pass ? "PASS" : "FAIL") << '\n';
+    std::cout << "Test 11 (repeated realloc chain): " << (pass ? "PASS" : "FAIL") << '\n';
 }
 }
 
-void stats_test(Block block) {
+void stats_test() {
     js_alloc(32);
     js_alloc(64);
     js_alloc(128);
-    js_alloc(block.capacity * 10); // guaranteed fail
+    js_alloc(js_get_capacity() * 10); // guaranteed fail
 
     void* p1 = js_alloc(32);
     void* p2 = js_alloc(64);
@@ -360,17 +347,11 @@ void stats_test(Block block) {
 
     void* p3 = js_alloc(15);
 
-    bool pass2 =
-        (stats.current_allocated_bytes == 239) &&
-        (stats.peak_allocated_bytes == 320);
-
+    bool pass2 = (stats.current_allocated_bytes == 239) && (stats.peak_allocated_bytes == 320);
     std::cout << "Test 2 (reuse accounting): " << (pass2 ? "PASS" : "FAIL") << '\n';
 
     js_dealloc(p3);
-
-    bool pass3 =
-        (stats.current_allocated_bytes == 224) &&
-        (stats.peak_allocated_bytes == 320);
+    bool pass3 = (stats.current_allocated_bytes == 224) && (stats.peak_allocated_bytes == 320);
 
     std::cout << "Test 3 (reuse free): " << (pass3 ? "PASS" : "FAIL") << '\n';
 
@@ -389,9 +370,7 @@ void stats_test(Block block) {
 
     p4 = js_realloc(p4, 10);
 
-    bool pass4 =
-        (stats.current_allocated_bytes == alloc_before - 5) &&
-        (stats.current_consumed_bytes == consumed_before);
+    bool pass4 = (stats.current_allocated_bytes == alloc_before - 5) && (stats.current_consumed_bytes == consumed_before);
 
     std::cout << "Test 4 (logical shrink): " << (pass4 ? "PASS" : "FAIL") << '\n';
 
@@ -400,9 +379,7 @@ void stats_test(Block block) {
 
     p4 = js_realloc(p4, 16);
 
-    bool pass5 =
-        (stats.current_allocated_bytes == alloc_before2 + 6) &&
-        (stats.current_consumed_bytes == consumed_before2);
+    bool pass5 = (stats.current_allocated_bytes == alloc_before2 + 6) && (stats.current_consumed_bytes == consumed_before2);
 
     std::cout << "Test 5 (logical growth): " << (pass5 ? "PASS" : "FAIL") << '\n';
 
@@ -413,9 +390,7 @@ void stats_test(Block block) {
 
     p5 = js_realloc(p5, 32);
 
-    bool pass6 =
-        (stats.current_allocated_bytes == alloc_before3 - 96) &&
-        (stats.current_consumed_bytes < consumed_before3);
+    bool pass6 = (stats.current_allocated_bytes == alloc_before3 - 96) && (stats.current_consumed_bytes < consumed_before3);
 
     std::cout << "Test 6 (physical shrink): " << (pass6 ? "PASS" : "FAIL") << '\n';
 
@@ -466,7 +441,7 @@ void stats_test(Block block) {
     size_t peak_before6 = stats.peak_allocated_bytes;
     size_t failed_before6 = stats.failed_allocations;
     
-    void* failed = js_realloc(p8, block.capacity * 100);
+    void* failed = js_realloc(p8, js_get_capacity() * 100);
     
     bool pass9 =
         (failed == nullptr) &&

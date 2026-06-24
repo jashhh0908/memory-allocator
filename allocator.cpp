@@ -367,9 +367,24 @@ const Stats& get_stats() {
     return g_allocator.stats;
 }
 
+//helper function 
 void js_reset_allocator() {
     if (g_allocator_initialized) {
         js_freeBlock(&g_allocator);
         g_allocator_initialized = false;
     }
+}
+
+//helper function - returns the freelist head pointer
+FreeBlock* js_get_freelist() {
+    return g_allocator.freelist; 
+}
+
+//helper function - returns size of the allocator
+size_t js_get_capacity() {
+    if(!g_allocator_initialized) {
+        g_allocator = js_getBlock(BLOCK_SIZE);
+        g_allocator_initialized = true;
+    }
+    return g_allocator.capacity;
 }

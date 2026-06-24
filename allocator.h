@@ -41,3 +41,5 @@ Block js_getBlock(size_t size);
 void js_freeBlock(Block* block);
 const Stats& get_stats();
 void js_reset_allocator();
+FreeBlock* js_get_freelist();
+size_t js_get_capacity();
